@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="tituloPagina">Cargando...</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body class="landing-page">
+    <div class="landing-container">
+        <div class="landing-header">
+            <h1 id="tituloEvento" class="landing-titulo"></h1>
+            <p class="landing-subtitulo">¡Bienvenidos!</p>
+        </div>
+
+        <div class="menu-options">
+            <a href="mesas.html" class="menu-card">
+                <div class="menu-icon">🪑</div>
+                <h2>Encuentra tu mesa</h2>
+                <p>Busca tu nombre y descubre dónde te sientas</p>
+            </a>
+
+            <a href="album.html" class="menu-card">
+                <div class="menu-icon">📸</div>
+                <h2>Álbum de fotos</h2>
+                <p>Comparte los momentos de esta noche especial</p>
+            </a>
+        </div>
+
+        <div class="landing-footer">
+            <p id="bienvenida"></p>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        document.getElementById('tituloPagina').textContent = CONFIG.textos.tituloPagina;
+        document.getElementById('tituloEvento').textContent = CONFIG.textos.titulo;
+        document.getElementById('bienvenida').textContent = CONFIG.textos.bienvenida;
+        if (CONFIG.tema.fondos && CONFIG.tema.fondos.landing) {
+            document.body.style.background = CONFIG.tema.fondos.landing;
+        }
+    </script>
+</body>
+</html>

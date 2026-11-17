@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="tituloPagina">Cargando...</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body class="mesas-page">
+    <div class="tarjeta">
+        <a href="index.html" class="btn-regresar-mesas">← Volver al menú</a>
+        <h1 id="tituloEvento">Cargando...</h1>
+        <p id="subtitulo" class="instrucciones">Cargando...</p>
+
+        <div id="inputBlock" class="input-contenedor">
+            <input type="text" id="nombreInvitado" placeholder="Ej. Nayeli Landell" autocomplete="off">
+        </div>
+
+        <div class="sugerencias-wrapper">
+            <ul id="listaSugerencias" class="sugerencias oculto-lista"></ul>
+        </div>
+
+        <button id="btnAccion" onclick="controladorBoton()">Buscar Mesa</button>
+        <h2 id="resultado"></h2>
+
+        <div id="mapaArea" class="mapa-contenedor">
+            <img id="croquisImagen" src="" alt="Croquis de la mesa">
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        let listaInvitados = [];
+        let enModoResultado = false;
+        const t = CONFIG.textos;
+
+        document.getElementById('tituloPagina').textContent = t.tituloPagina;
+        document.getElementById('tituloEvento').textContent = t.titulo;
+        document.getElementById('nombreInvitado').placeholder = t.placeholder;
+        document.getElementById('btnAccion').innerText = t.botonBuscar;
+        document.getElementById('subtitulo').textContent = t.instrucciones;
+
+        if (CONFIG.tema.fondos && CONFIG.tema.fondos.mesas) {
+            document.body.style.background = CONFIG.tema.fondos.mesas;
+        }
+
+        async function cargarInvitados() {
+            try {
+                const respuesta = await fetch(CONFIG.datos.urlInvitados);
+                const data = await respuesta.json();
+                if (Array.isArray(data)) listaInvitados = data;
+                else if (data.record && Array.isArray(data.record)) listaInvitados = data.record;
+                else if (data.record && data.record.invitados) listaInvitados = data.record.invitados;
+                else if (data.invitados) listaInvitados = data.invitados;
+                else listaInvitados = [];
+                console.log("✅ Invitados cargados:", listaInvitados.length);
+            } catch (error) {
+                console.error("❌ Error:", error);
+            }
+        }
+
+        function normalizarTexto(texto) {
+            return texto ? texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : "";
+        }
+
+        function controladorBoton() {
+            if (!enModoResultado) buscarMesa();
+            else regresarHome();
+        }
+
+        function mostrarCroquis(mesa) {
+            const croquisImagen = document.getElementById('croquisImagen');
+            const mapaArea = document.getElementById('mapaArea');
+            const url = CONFIG.tema.imagenes.croquis.replace('{mesa}', mesa);
+            croquisImagen.onerror = () => { croquisImagen.onerror = null; croquisImagen.src = CONFIG.tema.imagenes.croquisGeneral; };
+            croquisImagen.src = url;
+            mapaArea.classList.add('visible');
+        }
+
+        function rellenar(texto, datos) {
+            return texto.replace(/\{(\w+)\}/g, (_, clave) => datos[clave] ?? '');
+        }
+
+        function pintarResultado(encontrado) {
+            const subtitulo = document.getElementById('subtitulo');
+            const selectorResultado = document.getElementById('resultado');
+            const mapaArea = document.getElementById('mapaArea');
+
+            const nombre = encontrado.nombre || encontrado.name || "Invitado";
+            const mesa = encontrado.mesa || encontrado.table || "N/A";
+            const datosMensaje = { nombre, mesa, extraAnfitriona: t.extraAnfitriona, avisoNinos: t.avisoNinos };
+
+            const nombreMesa = normalizarTexto(mesa);
+            const mesasNinos = (CONFIG.especiales.mesasNinos || []).map(normalizarTexto);
+            const anfitriones = (CONFIG.especiales.anfitriones || []).map(normalizarTexto);
+            const esAnfitrion = anfitriones.includes(normalizarTexto(nombre));
+            const mesaEsNumero = /^\d+$/.test(String(mesa));
+
+            subtitulo.innerText = t.bienvenidaMesa;
+            if (esAnfitrion) {
+                subtitulo.innerText = t.bienvenidaAnfitriona;
+                selectorResultado.innerHTML = rellenar(mesaEsNumero ? t.mensajeAnfitrionaNumero : t.mensajeAnfitriona, datosMensaje);
+                mostrarCroquis(mesa);
+            } else if (mesasNinos.includes(nombreMesa)) {
+                selectorResultado.innerHTML = rellenar(t.mensajeNinos, datosMensaje);
+                mapaArea.classList.remove('visible');
+            } else {
+                selectorResultado.innerHTML = rellenar(t.mensajeMesa, datosMensaje);
+                mostrarCroquis(mesa);
+            }
+        }
+
+        function buscarMesa() {
+            const selectorInput = document.getElementById('nombreInvitado').value;
+            const selectorResultado = document.getElementById('resultado');
+            const mapaArea = document.getElementById('mapaArea');
+            const inputBlock = document.getElementById('inputBlock');
+            const btnAccion = document.getElementById('btnAccion');
+
+            if (!selectorInput.trim()) { alert(t.alertaVacio); return; }
+            if (listaInvitados.length === 0) {
+                selectorResultado.innerHTML = `<span class='error'>No se pudo cargar la lista.<br><span class='error-hint'>Revisa tu conexión.</span></span>`;
+                return;
+            }
+
+            const busquedaLimpia = normalizarTexto(selectorInput);
+            const encontrado = listaInvitados.find(inv => {
+                const nombreInv = inv.nombre || inv.name;
+                return normalizarTexto(nombreInv) === busquedaLimpia;
+            });
+
+            if (encontrado) {
+                ocultarLista();
+                pintarResultado(encontrado);
+                inputBlock.classList.add('oculto');
+                btnAccion.innerText = t.botonRegresar;
+                enModoResultado = true;
+            } else {
+                selectorResultado.innerHTML = `<span class='error'>${t.errorNombre}<br><span class='error-hint'>${t.errorHint}</span></span>`;
+                mapaArea.classList.remove('visible');
+            }
+        }
+
+        function regresarHome() {
+            document.getElementById('nombreInvitado').value = "";
+            document.getElementById('resultado').innerHTML = "";
+            document.getElementById('mapaArea').classList.remove('visible');
+            ocultarLista();
+            document.getElementById('inputBlock').classList.remove('oculto');
+            enModoResultado = false;
+            document.getElementById('btnAccion').innerText = t.botonBuscar;
+            document.getElementById('subtitulo').textContent = t.instrucciones;
+        }
+
+        const inputNombre = document.getElementById('nombreInvitado');
+        const listaSug = document.getElementById('listaSugerencias');
+        let indiceActivo = -1;
+        let sugerenciasAct = [];
+
+        function mostrarSugerencias() {
+            const consulta = normalizarTexto(inputNombre.value);
+            listaSug.innerHTML = '';
+            indiceActivo = -1;
+            sugerenciasAct = [];
+            if (enModoResultado || consulta.length < 2) return ocultarLista();
+
+            const palabras = consulta.split(/\s+/);
+            sugerenciasAct = listaInvitados.filter(inv => {
+                const n = normalizarTexto(inv.nombre || inv.name);
+                return palabras.every(p => n.includes(p));
+            }).slice(0, 8);
+
+            if (!sugerenciasAct.length) return ocultarLista();
+
+            sugerenciasAct.forEach(inv => {
+                const li = document.createElement('li');
+                li.textContent = inv.nombre || inv.name;
+                li.addEventListener('mousedown', e => { e.preventDefault(); seleccionarSugerencia(inv); });
+                listaSug.appendChild(li);
+            });
+            listaSug.classList.remove('oculto-lista');
+        }
+
+        function seleccionarSugerencia(inv) {
+            inputNombre.value = inv.nombre || inv.name;
+            ocultarLista();
+            inputNombre.blur();
+        }
+
+        function ocultarLista() { listaSug.classList.add('oculto-lista'); }
+
+        inputNombre.addEventListener('input', mostrarSugerencias);
+        inputNombre.addEventListener('focus', mostrarSugerencias);
+        inputNombre.addEventListener('keydown', e => {
+            const abierta = !listaSug.classList.contains('oculto-lista') && listaSug.children.length > 0;
+            if (!abierta) return;
+            if (e.key === 'ArrowDown') { e.preventDefault(); indiceActivo = (indiceActivo + 1) % listaSug.children.length; }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); indiceActivo = (indiceActivo - 1 + listaSug.children.length) % listaSug.children.length; }
+            else if (e.key === 'Enter') { e.preventDefault(); if (indiceActivo >= 0) seleccionarSugerencia(sugerenciasAct[indiceActivo]); else { ocultarLista(); buscarMesa(); } return; }
+            else return;
+            [...listaSug.children].forEach((li, i) => li.classList.toggle('activa', i === indiceActivo));
+        });
+        document.addEventListener('click', e => { if (e.target !== inputNombre && !listaSug.contains(e.target)) ocultarLista(); });
+
+        cargarInvitados();
+    </script>
+</body>
+</html>

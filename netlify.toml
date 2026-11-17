@@ -1,0 +1,13 @@
+[functions]
+  directory = "netlify/functions"
+
+[[redirects]]
+  from = "/api/fotos"
+  to = "/.netlify/functions/fotos-get"
+  status = 200
+
+[[redirects]]
+  from = "/api/fotos"
+  to = "/.netlify/functions/fotos-post"
+  status = 200
+  methods = ["POST"]

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Álbum de Fotos</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+</head>
+<body class="album-page">
+    <div class="album-container">
+        <header class="album-header">
+            <a href="index.html" class="btn-regresar">← Volver</a>
+            <h1 id="albumTitulo" class="album-titulo">Álbum de Fotos</h1>
+            <p id="albumInstrucciones" class="album-instrucciones"></p>
+            <label class="btn-subir">
+                <span id="textoSubir">📤 Subir fotos</span>
+                <input type="file" id="photoInput" multiple accept="image/*" hidden>
+            </label>
+        </header>
+
+        <div id="uploadStatus" class="upload-status" style="display:none;">Subiendo fotos... por favor espera.</div>
+        <div id="gallery" class="gallery">
+            <p id="emptyMsg" class="empty-msg" style="display:none;"></p>
+        </div>
+    </div>
+
+    <div id="lightbox" class="lightbox" style="display:none;">
+        <button class="lightbox-close" onclick="cerrarLightbox()">✕</button>
+        <img id="lightboxImg" src="" alt="Foto ampliada">
+        <button class="lightbox-save-btn" id="btnLightboxSave">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                <polyline points="16 6 12 2 8 6"/>
+                <line x1="12" y1="2" x2="12" y2="15"/>
+            </svg>
+            <span>Guardar</span>
+        </button>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        // Verificar que exista la configuración
+        if (!CONFIG.album) {
+            alert("Error: Falta la configuración del álbum en config.js");
+        }
+
+        const { album } = CONFIG;
+        document.getElementById('albumTitulo').textContent = album.titulo;
+        document.getElementById('albumInstrucciones').textContent = album.instrucciones;
+        document.getElementById('textoSubir').textContent = album.textoSubir;
+
+        if (CONFIG.tema.fondos && CONFIG.tema.fondos.album) {
+            document.body.style.background = CONFIG.tema.fondos.album;
+        }
+
+        firebase.initializeApp(album.firebase);
+        const db = firebase.database();
+        const fotosRef = db.ref('fotos');
+        let fotoLightboxActual = null;
+
+        // Escuchar cambios en tiempo real
+        fotosRef.orderByChild('fecha').on('value', (snapshot) => {
+            const fotos = [];
+            snapshot.forEach((child) => {
+                fotos.unshift({ id: child.key, ...child.val() });
+            });
+            renderGallery(fotos);
+        });
+
+        function renderGallery(fotos) {
+            const gallery = document.getElementById('gallery');
+            const emptyMsg = document.getElementById('emptyMsg');
+            
+            if (fotos.length === 0) {
+                gallery.innerHTML = '';
+                emptyMsg.textContent = album.textoVacio;
+                emptyMsg.style.display = 'block';
+                gallery.appendChild(emptyMsg);
+                return;
+            }
+
+            // Usamos data-attributes para evitar errores comillas en URLs
+            gallery.innerHTML = fotos.map((f) => `
+                <div class="photo-card" data-url="${f.url}" data-id="${f.id}">
+                    <img src="${f.url}" alt="Foto del evento" loading="lazy">
+                    ${f.nombre ? `<div class="photo-author">${f.nombre}</div>` : ''}
+                </div>
+            `).join('');
+
+            // Asignar eventos click de forma segura
+            document.querySelectorAll('.photo-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    abrirLightbox(card.dataset.url, card.dataset.id);
+                });
+            });
+        }
+
+        function abrirLightbox(url, id) {
+            fotoLightboxActual = { url, id };
+            document.getElementById('lightboxImg').src = url;
+            document.getElementById('lightbox').style.display = 'flex';
+        }
+
+        function cerrarLightbox() {
+            document.getElementById('lightbox').style.display = 'none';
+            fotoLightboxActual = null;
+        }
+
+        document.getElementById('lightbox').addEventListener('click', (e) => {
+            if (e.target.id === 'lightbox') cerrarLightbox();
+        });
+
+        document.getElementById('btnLightboxSave').addEventListener('click', () => {
+            if (fotoLightboxActual) guardarFoto(fotoLightboxActual.url, fotoLightboxActual.id);
+        });
+
+        async function guardarFoto(url, id) {
+            try {
+                const response = await fetch(url, { mode: 'cors' });
+                const blob = await response.blob();
+                const uniqueName = `foto-${id || Date.now()}.jpg`;
+                const file = new File([blob], uniqueName, { type: blob.type });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({ files: [file], title: 'Foto del evento', text: 'Mira esta foto' });
+                } else {
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = uniqueName;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            } catch (error) {
+                if (error.name !== 'AbortError') alert('Mantén presionada la imagen y selecciona "Guardar imagen".');
+            }
+        }
+
+        document.getElementById('photoInput').addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
+            
+            const nombre = prompt(album.placeholderNombre) || 'Anónimo';
+            const status = document.getElementById('uploadStatus');
+            status.style.display = 'block';
+            let exitos = 0;
+
+            for (const file of files) {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('upload_preset', album.cloudinary.uploadPreset);
+                    
+                    const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${album.cloudinary.cloudName}/image/upload`, { 
+                        method: 'POST', 
+                        body: formData 
+                    });
+                    const cloudData = await cloudRes.json();
+                    
+                    if (!cloudData.secure_url) throw new Error("Fallo en Cloudinary");
+                    
+                    await fotosRef.push({ 
+                        url: cloudData.secure_url, 
+                        nombre: nombre.slice(0, 60), 
+                        fecha: Date.now() 
+                    });
+                    exitos++;
+                } catch (err) {
+                    console.error("Error subiendo archivo:", err);
+                }
+            }
+            
+            status.style.display = 'none';
+            e.target.value = '';
+            if (exitos < files.length) {
+                alert(`Se subieron ${exitos} de ${files.length} fotos.`);
+            }
+        });
+    </script>
+</body>
+</html>
