@@ -69,8 +69,8 @@ const CONFIG = {
     textoSubir: "📤 Subir fotos",
     textoVacio: "¡Sé el primero en subir una foto!",
     cloudinary: {
-      cloudName: "TU_CLOUD_NAME_AQUI",
-      uploadPreset: "TU_PRESET_AQUI",
+      cloudName: "isclyhb1",
+      uploadPreset: "Template",
     },
     firebase: {
       apiKey: "AIzaSyBdr5SN4orzTn9l968Is4Egdkob-d1dKd8",
